@@ -20,13 +20,13 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent))
 
 from fetch import fetch_source  # noqa: E402
-from filter import filter_postings  # noqa: E402
+from filter import CompanyMatcher, filter_postings  # noqa: E402
 from notify_discord import notify  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCES_PATH = ROOT / "config" / "sources.yaml"
-LOCATIONS_PATH = ROOT / "config" / "eu_locations.yaml"
-SPONSORS_PATH = ROOT / "config" / "h1b_sponsors.yaml"
+ROLE_CATEGORIES_PATH = ROOT / "config" / "role_categories.yaml"
+NOTIFY_PATH = ROOT / "config" / "notify_companies.yaml"
 STATE_PATH = ROOT / "state" / "seen.json"
 
 log = logging.getLogger("job-alert-bot")
@@ -104,16 +104,17 @@ def main() -> int:
     )
 
     sources_config = yaml.safe_load(SOURCES_PATH.read_text(encoding="utf-8"))
-    locations_config = yaml.safe_load(LOCATIONS_PATH.read_text(encoding="utf-8"))
+    role_categories_config = yaml.safe_load(ROLE_CATEGORIES_PATH.read_text(encoding="utf-8"))
     settings = sources_config.get("settings", {}) or {}
 
-    # Optional: a missing sponsor list degrades to the old behavior (every
-    # unknown-sponsorship US role is "unverified") rather than killing the run.
-    if SPONSORS_PATH.exists():
-        sponsors_config = yaml.safe_load(SPONSORS_PATH.read_text(encoding="utf-8")) or {}
+    # Optional: a missing notify list degrades to "notify on nothing" rather
+    # than killing the run -- the board still renders everything either way.
+    if NOTIFY_PATH.exists():
+        notify_config = yaml.safe_load(NOTIFY_PATH.read_text(encoding="utf-8")) or {}
     else:
-        log.warning("%s not found -- no known-sponsor badging this run", SPONSORS_PATH.name)
-        sponsors_config = {}
+        log.warning("%s not found -- Discord will stay silent this run", NOTIFY_PATH.name)
+        notify_config = {}
+    notify_matcher = CompanyMatcher(notify_config)
 
     state = load_state()
     bootstrapping = args.reseed or not state.get("bootstrapped", False)
@@ -130,18 +131,25 @@ def main() -> int:
              len(all_postings), len(sources_config.get("sources", [])))
 
     # --- filter ---
-    matches = filter_postings(all_postings, locations_config, settings, sponsors_config)
+    # Everything here (US, internship, categorized) is what the board shows.
+    # Discord is narrower: only postings from a config/notify_companies.yaml
+    # company are even candidates for a notification. state/seen.json only
+    # ever needs to track that narrower pool -- the board re-derives its full
+    # picture from the live sources on every render rather than from state.
+    matches = filter_postings(all_postings, settings, role_categories_config)
+    notify_candidates = [p for p in matches if notify_matcher.matches(p.get("company", ""))]
+    log.info("%d matches, %d from notify-list companies", len(matches), len(notify_candidates))
 
     # --- dedupe (cross-source too: same id from two repos collapses here) ---
     seen_ids = set(state["postings"])
     new_by_id: dict[str, dict] = {}
-    for posting in matches:
+    for posting in notify_candidates:
         if posting["id"] not in seen_ids and posting["id"] not in new_by_id:
             new_by_id[posting["id"]] = posting
     new_postings = sorted(
         new_by_id.values(), key=lambda p: p.get("date_posted", ""), reverse=True
     )
-    log.info("%d matches, %d new after dedupe", len(matches), len(new_postings))
+    log.info("%d notify-list matches, %d new after dedupe", len(notify_candidates), len(new_postings))
 
     now_iso = datetime.now(timezone.utc).isoformat()
 

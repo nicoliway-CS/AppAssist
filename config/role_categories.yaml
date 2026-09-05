@@ -1,0 +1,154 @@
+# Positive-keyword screen that tags each posting with one or more role
+# categories: software_engineering, embedded_systems, hardware_engineering.
+#
+# Same philosophy as the require_title_patterns screen the old eu-tech-jobs
+# source used: a posting must look like the target role from its title,
+# because a source's own category tag can't be trusted. Simplify ships its
+# own `category` field (Software / Hardware / AI-ML-Data / Product / Quant)
+# and it was checked before writing this file -- it is noisy in exactly the
+# way eu-tech-jobs' role_family tag was. Sampled 2026-09 against
+# Summer2027-Internships: the "Hardware" bucket contained "Software
+# Development Intern", "Software Engineering Co-op - Fall 2026" and
+# "Embedded Software Engineer Intern" alongside real hardware roles, so it
+# is not usable as a filter on its own. Title keywords do the real work here.
+#
+# A posting can match more than one category -- "Embedded Software Engineer
+# Intern" is genuinely both, and isn't forced to pick one. A posting matching
+# NONE of the three is dropped, same as the old no_match behavior for
+# non-CS roles, unless enable_other_category is turned on below.
+#
+# All patterns are matched as whole words/phrases against the normalized
+# (lowercased, de-accented) title -- see compile_term_patterns in
+# src/normalize.py. Whole-word matters here for the same reason it did in
+# the old exclude_title_patterns: a bare-word screen invites false positives
+# ("engineer" alone would tag every Sales Engineer and Field Engineer req as
+# Software Engineering), so most entries below are qualified phrases, not
+# single words.
+
+options:
+  # FPGA work straddles embedded and hardware. Defaulting to embedded because
+  # most CS/CE new-grad-adjacent FPGA reqs are digital-logic/verification
+  # work reached from an embedded-systems track, not analog/board-level
+  # hardware -- but this is a judgment call, not a measurement. Set to
+  # "hardware" or "both" if you disagree.
+  fpga_category: embedded   # embedded | hardware | both
+
+  # If true, a posting matching none of the three categories is kept and
+  # tagged "other" instead of being dropped. Off by default -- flip it on
+  # temporarily, look at what accumulates in the "other" bucket on the board,
+  # and use it to find keyword gaps above, then turn it back off.
+  enable_other_category: false
+
+# Applied to whichever category (or categories) `fpga_category` selects above,
+# so the term only has to be written once.
+fpga_patterns:
+  - fpga
+  - field programmable gate array
+
+categories:
+  software_engineering:
+    label: "Software Engineering"
+    patterns:
+      - software engineer
+      - software engineering
+      - software developer
+      - software development
+      - swe
+      - sde
+      - backend
+      - back end
+      - frontend
+      - front end
+      - full stack
+      - fullstack
+      - web developer
+      - web engineer
+      - mobile developer
+      - ios developer
+      - android developer
+      - application developer
+      - applications developer
+      - programmer
+      - devops
+      - devsecops
+      - site reliability
+      - sre
+      - platform engineer
+      - cloud engineer
+      - infrastructure engineer
+      - systems programmer
+      - distributed systems
+      - compiler engineer
+      - security engineer
+      - application security
+      - qa engineer
+      - sdet
+      - test engineer
+      - test automation
+      - data engineer
+      - machine learning engineer
+      - ml engineer
+      - ai engineer
+      - deep learning engineer
+      - computer vision engineer
+      - nlp engineer
+      - game developer
+      - game engineer
+
+  embedded_systems:
+    label: "Embedded Systems"
+    patterns:
+      - embedded
+      - embedded systems
+      - embedded software
+      - embedded engineer
+      - firmware
+      - firmware engineer
+      - rtos
+      - real-time operating system
+      - real time operating system
+      - microcontroller
+      - iot
+      - internet of things
+      - device driver
+      - driver development
+      - bare metal
+      - baremetal
+      - low-level software
+      - low level software
+      - avionics software
+      - flight software
+
+  hardware_engineering:
+    label: "Hardware Engineering"
+    patterns:
+      - hardware engineer
+      - hardware engineering
+      - hardware design
+      - pcb
+      - printed circuit board
+      - asic
+      - vlsi
+      - digital design
+      - rtl design
+      - rtl engineer
+      - verilog
+      - vhdl
+      - chip design
+      - ic design
+      - soc design
+      - silicon engineer
+      - semiconductor engineer
+      - analog design
+      - mixed signal
+      - signal integrity
+      - hardware design engineer
+      - avionics hardware
+      # Bare below, deliberately broader than everything above -- kept at the
+      # requester's explicit ask rather than silently narrowed. "Electrical
+      # Engineer" alone can't be told apart from a power-grid/building-systems
+      # EE role by keyword matching alone; it is a real gap. If it proves
+      # noisy in practice, replace it with qualified phrases like the ones
+      # above (asic/vlsi/digital-design engineer) instead of the bare term.
+      - electrical engineer
+      - electrical engineering

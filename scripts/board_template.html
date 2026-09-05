@@ -19,14 +19,16 @@
   --line-2: #C9D1DA;
   --accent: #0E6E6E;
   --accent-ink: #FFFFFF;
-  --confirmed: #0F766E;
-  --confirmed-bg: #E2F1EF;
-  --eu: #6D4AA6;
-  --eu-bg: #EDE7F6;
-  --known: #3B5BA5;
-  --known-bg: #E5EAF6;
-  --unverified: #97620F;
-  --unverified-bg: #F6EDDC;
+  --swe: #0F766E;
+  --swe-bg: #E2F1EF;
+  --embedded: #6D4AA6;
+  --embedded-bg: #EDE7F6;
+  --hardware: #3B5BA5;
+  --hardware-bg: #E5EAF6;
+  --other: #97620F;
+  --other-bg: #F6EDDC;
+  --notified: #B8860B;
+  --notified-bg: #FBF1D7;
   --shadow: 0 1px 2px rgba(22,32,43,.06), 0 1px 8px rgba(22,32,43,.04);
   --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -44,14 +46,16 @@
     --line-2: #333C46;
     --accent: #4FB3AC;
     --accent-ink: #06231F;
-    --confirmed: #5CC2B4;
-    --confirmed-bg: #12302C;
-    --eu: #B69BE0;
-    --eu-bg: #241A38;
-    --known: #8FA9E0;
-    --known-bg: #1B2439;
-    --unverified: #D6A455;
-    --unverified-bg: #33270F;
+    --swe: #5CC2B4;
+    --swe-bg: #12302C;
+    --embedded: #B69BE0;
+    --embedded-bg: #241A38;
+    --hardware: #8FA9E0;
+    --hardware-bg: #1B2439;
+    --other: #D6A455;
+    --other-bg: #33270F;
+    --notified: #E0B84A;
+    --notified-bg: #362A0F;
     --shadow: 0 1px 2px rgba(0,0,0,.4), 0 1px 10px rgba(0,0,0,.28);
   }
 }
@@ -66,14 +70,16 @@
   --line-2: #333C46;
   --accent: #4FB3AC;
   --accent-ink: #06231F;
-  --confirmed: #5CC2B4;
-  --confirmed-bg: #12302C;
-  --eu: #B69BE0;
-  --eu-bg: #241A38;
-  --known: #8FA9E0;
-  --known-bg: #1B2439;
-  --unverified: #D6A455;
-  --unverified-bg: #33270F;
+  --swe: #5CC2B4;
+  --swe-bg: #12302C;
+  --embedded: #B69BE0;
+  --embedded-bg: #241A38;
+  --hardware: #8FA9E0;
+  --hardware-bg: #1B2439;
+  --other: #D6A455;
+  --other-bg: #33270F;
+  --notified: #E0B84A;
+  --notified-bg: #362A0F;
   --shadow: 0 1px 2px rgba(0,0,0,.4), 0 1px 10px rgba(0,0,0,.28);
 }
 
@@ -114,10 +120,10 @@ h1 {
 }
 .tier .k { font-size: 13px; color: var(--ink-2); margin-top: 3px; }
 .tier .h { font-size: 12px; color: var(--ink-3); margin-top: 6px; }
-.t-confirmed { --tint: var(--confirmed); }
-.t-eu { --tint: var(--eu); }
-.t-known { --tint: var(--known); }
-.t-unverified { --tint: var(--unverified); }
+.t-software_engineering { --tint: var(--swe); }
+.t-embedded_systems { --tint: var(--embedded); }
+.t-hardware_engineering { --tint: var(--hardware); }
+.t-other { --tint: var(--other); }
 
 /* --- controls --- */
 .bar {
@@ -130,6 +136,7 @@ h1 {
   color: var(--ink); background: var(--surface);
   border: 1px solid var(--line-2); border-radius: 7px;
 }
+.search.company { flex: 1 1 180px; }
 .search::placeholder { color: var(--ink-3); }
 .search:focus-visible, .chip:focus-visible, .rowcheck:focus-visible, .apply:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
@@ -167,10 +174,10 @@ h1 {
   border-left: 3px solid var(--tint); border-radius: 8px;
   padding: 12px 14px; margin-bottom: 7px; box-shadow: var(--shadow);
 }
-.row.g-confirmed { --tint: var(--confirmed); }
-.row.g-eu { --tint: var(--eu); }
-.row.g-known { --tint: var(--known); }
-.row.g-unverified { --tint: var(--unverified); }
+.row.g-software_engineering { --tint: var(--swe); }
+.row.g-embedded_systems { --tint: var(--embedded); }
+.row.g-hardware_engineering { --tint: var(--hardware); }
+.row.g-other { --tint: var(--other); }
 .row.done { opacity: .48; }
 .row.done .co { text-decoration: line-through; }
 
@@ -178,14 +185,16 @@ h1 {
 .co { font-weight: 650; letter-spacing: -.005em; }
 .ti { color: var(--ink-2); font-size: 14px; }
 .meta { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 5px; font-size: 12.5px; color: var(--ink-3); align-items: center; }
+.badges { display: inline-flex; flex-wrap: wrap; gap: 5px; }
 .badge {
   font-size: 11px; font-weight: 600; letter-spacing: .02em; padding: 2px 8px;
   border-radius: 4px; background: var(--tintbg); color: var(--tint);
 }
-.g-confirmed .badge { --tintbg: var(--confirmed-bg); }
-.g-eu .badge { --tintbg: var(--eu-bg); }
-.g-known .badge { --tintbg: var(--known-bg); }
-.g-unverified .badge { --tintbg: var(--unverified-bg); }
+.badge.b-software_engineering { --tint: var(--swe); --tintbg: var(--swe-bg); }
+.badge.b-embedded_systems { --tint: var(--embedded); --tintbg: var(--embedded-bg); }
+.badge.b-hardware_engineering { --tint: var(--hardware); --tintbg: var(--hardware-bg); }
+.badge.b-other { --tint: var(--other); --tintbg: var(--other-bg); }
+.badge.notified { --tint: var(--notified); --tintbg: var(--notified-bg); }
 .new { font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: .04em; }
 .apply {
   align-self: center; font-size: 13px; font-weight: 600; text-decoration: none;
@@ -222,7 +231,10 @@ h1 {
 
   <div class="bar">
     <input class="search" id="q" type="search" placeholder="Search company, role, or location…" aria-label="Search postings">
+    <input class="search company" id="companyq" type="search" list="companies" placeholder="Filter by company…" aria-label="Filter by company">
+    <datalist id="companies">__COMPANIES__</datalist>
     <div class="chips" id="chips">__CHIPS__
+      <button class="chip" id="notifiedonly" aria-pressed="false"><span class="dot"></span>Notified only</button>
       <button class="chip" id="hidedone" aria-pressed="false">Hide reviewed</button>
     </div>
     <div class="progress">
@@ -234,22 +246,22 @@ h1 {
   <main id="list"></main>
 
   <p class="note">
-    <b>Tiers are company-level, not role-level.</b> “Known H-1B employer” means the company
-    filed H-1B petitions in the USCIS FY2022–23 data — it is not a promise about this
-    particular req. Sponsoring employers still post cleared and US-persons-only roles.
-    Review state is saved in this browser only.
+    <b>Categories are a keyword screen, not a guarantee.</b> A title can earn more than
+    one badge — "Embedded Software Engineer Intern" gets both Software Engineering and
+    Embedded Systems. See <code>config/role_categories.yaml</code> to retune the keyword
+    lists. Review state is saved in this browser only.
   </p>
   <p class="note">
-    <b>This board is wider than your Discord alerts.</b> It includes the
-    <em>sponsorship unverified</em> tier, which <code>allow_unknown_sponsorship: false</code>
-    keeps out of the channel. Rebuilt once a day, each morning around 7 AM ET, from the
-    live feeds — so a posting that disappears here has been closed or filled upstream.
+    <b>"Notified" means the company is on your list, not that this exact posting pinged.</b>
+    Discord only fires for companies in <code>config/notify_companies.yaml</code> — everything
+    else here still passed the location/internship/category filters, it just isn't one you
+    asked to be pinged for. Rebuilt once a day, each morning around 7 AM ET, from the live
+    feeds — so a posting that disappears here has been closed or filled upstream.
   </p>
   <p class="note">
     <b>Day headings are the source's posting date, not the build date.</b> A posting the
     source published no date for is filed under <em>Undated</em> rather than being dated
-    to the day the page happened to be built — about a third of the EU feed has no date
-    on it. Undated does not mean old.
+    to the day the page happened to be built. Undated does not mean old.
   </p>
 </div>
 
@@ -259,17 +271,19 @@ h1 {
   var rows = JSON.parse(document.getElementById("data").textContent);
   var list = document.getElementById("list");
   var q = document.getElementById("q");
+  var companyQ = document.getElementById("companyq");
   var hideDone = document.getElementById("hidedone");
+  var notifiedOnly = document.getElementById("notifiedonly");
   var KEY = "job-board-reviewed";
   var done = {};
   try { done = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { done = {}; }
 
   var active = __ACTIVE__;
   var LABEL = {
-    confirmed: "Sponsorship confirmed",
-    eu: "EU location",
-    known: "Known H-1B employer",
-    unverified: "Unverified"
+    software_engineering: "Software Engineering",
+    embedded_systems: "Embedded Systems",
+    hardware_engineering: "Hardware Engineering",
+    other: "Other"
   };
   var MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
@@ -298,10 +312,20 @@ h1 {
 
   function render() {
     var term = q.value.trim().toLowerCase();
+    var companyTerm = companyQ.value.trim().toLowerCase();
     var hide = hideDone.getAttribute("aria-pressed") === "true";
+    var onlyNotified = notifiedOnly.getAttribute("aria-pressed") === "true";
     var shown = rows.filter(function (r) {
-      if (!active[r.g]) return false;
+      // rc can carry more than one category -- shown if ANY of its
+      // categories is currently active, so multi-tagged rows compose with
+      // the chips the same way they compose with search.
+      var cats = r.rc || [r.g];
+      var visible = false;
+      for (var j = 0; j < cats.length; j++) if (active[cats[j]]) { visible = true; break; }
+      if (!visible) return false;
+      if (onlyNotified && !r.p) return false;
       if (hide && done[r.i]) return false;
+      if (companyTerm && r.c.toLowerCase().indexOf(companyTerm) === -1) return false;
       if (!term) return true;
       return (r.c + " " + r.t + " " + r.l).toLowerCase().indexOf(term) !== -1;
     });
@@ -328,13 +352,20 @@ h1 {
         html += '<section class="daygroup"><h2 class="dayhead">' + esc(prettyDay(day)) +
                 '<span class="c">' + counts[day] + "</span></h2>";
       }
+      var cats = r.rc || [r.g];
+      var badges = "";
+      for (var b = 0; b < cats.length; b++) {
+        badges += '<span class="badge b-' + cats[b] + '">' + (LABEL[cats[b]] || cats[b]) + "</span>";
+      }
+      if (r.p) badges += '<span class="badge notified">📣 Notified</span>';
+
       html += '<article class="row g-' + r.g + (done[r.i] ? " done" : "") + '">' +
         '<input class="rowcheck" type="checkbox" data-i="' + esc(r.i) + '"' +
           (done[r.i] ? " checked" : "") + ' aria-label="Mark reviewed">' +
         "<div>" +
           '<div class="co">' + esc(r.c) + "</div>" +
           '<div class="ti">' + esc(r.t) + "</div>" +
-          '<div class="meta"><span class="badge">' + LABEL[r.g] + "</span>" +
+          '<div class="meta"><span class="badges">' + badges + "</span>" +
             (r.n ? '<span class="new">NEW</span>' : "") +
             "<span>" + esc(r.l) + "</span>" +
             "<span>" + esc(r.s) + "</span>" +
@@ -370,6 +401,10 @@ h1 {
 
   var timer;
   q.addEventListener("input", function () {
+    clearTimeout(timer);
+    timer = setTimeout(render, 110);
+  });
+  companyQ.addEventListener("input", function () {
     clearTimeout(timer);
     timer = setTimeout(render, 110);
   });

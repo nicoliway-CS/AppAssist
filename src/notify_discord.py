@@ -14,33 +14,38 @@ EMBEDS_PER_MESSAGE = 10  # Discord's hard cap
 MAX_RETRIES = 4
 TIMEOUT = 20
 
-COLOR_EU = 0x3B88C3
-COLOR_US = 0x2ECC71
-COLOR_UNVERIFIED = 0xE67E22
+CATEGORY_LABELS = {
+    "software_engineering": "Software Engineering",
+    "embedded_systems": "Embedded Systems",
+    "hardware_engineering": "Hardware Engineering",
+    "other": "Other",
+}
+CATEGORY_COLORS = {
+    "software_engineering": 0x2ECC71,
+    "embedded_systems": 0x3498DB,
+    "hardware_engineering": 0xE67E22,
+    "other": 0x95A5A6,
+}
+DEFAULT_COLOR = 0x95A5A6
 
 
 def build_embed(posting: dict) -> dict:
     company = posting.get("company", "Unknown")
     title = posting.get("title", "Unknown role")
     location = posting.get("location", "Unspecified")
-    reason = posting.get("match_reason", "")
-    unverified = posting.get("unverified", False)
+    categories = posting.get("role_categories") or []
+    cat_labels = " / ".join(CATEGORY_LABELS.get(c, c) for c in categories) or "Uncategorized"
 
-    bits = [f"\U0001F4CD {location}"]
-    if posting.get("sponsorship_flag") == "yes":
-        bits.append("\U0001F6C2 Sponsors internationals")
-    elif posting.get("known_sponsor"):
-        # Company-level signal, not a promise about this specific req -- the
-        # wording says "employer", not "this role", on purpose.
-        bits.append("\U0001F6C2 Known H-1B employer")
-    if unverified:
-        bits.append("⚠️ Sponsorship unconfirmed")
-    bits.append(f"_{reason} · {posting.get('source_repo', '')}_")
+    bits = [
+        f"\U0001F4CD {location}",
+        f"\U0001F3F7️ {cat_labels}",
+        f"_{posting.get('source_repo', '')}_",
+    ]
 
     embed = {
         "title": f"{company} — {title}"[:256],
         "description": " · ".join(bits)[:4096],
-        "color": COLOR_UNVERIFIED if unverified else (COLOR_EU if reason.startswith("EU") else COLOR_US),
+        "color": CATEGORY_COLORS.get(categories[0] if categories else "other", DEFAULT_COLOR),
         "footer": {"text": f"Posted {_pretty_date(posting.get('date_posted', ''))}"},
     }
     # Discord rejects the whole payload if `url` is present but not a valid URL.

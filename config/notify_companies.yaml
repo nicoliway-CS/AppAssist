@@ -1,0 +1,182 @@
+# Companies worth a Discord ping.
+#
+# WHY THIS EXISTS
+#   Every posting that passes the location/internship/category filters lands
+#   on the board regardless of who posted it -- that pool is large. This list
+#   is the noise control on top of it: Discord only fires for postings from a
+#   company on this list. It is not a signal about sponsorship or eligibility
+#   (there is none to track here -- see README), just "companies I actually
+#   want pinged for."
+#
+# THIS LIST IS YOURS
+#   Unlike the old h1b_sponsors.yaml it replaces, there is no external data
+#   source backing these names -- USCIS H-1B filings say nothing about
+#   whether a company is worth your time as a US-citizen intern applicant.
+#   Add, remove, and regroup freely. It's seeded with big tech plus the
+#   aerospace/defense/robotics names relevant to embedded and hardware work,
+#   but the whole point is that you keep it current, not that it's complete.
+#
+# HOW MATCHING WORKS
+#   Names are normalized (lowercased, de-accented, legal suffixes stripped)
+#   and matched exactly OR as a prefix, so "Amazon" catches "Amazon Web
+#   Services" and "Amazon Robotics" without a separate entry for each.
+#   Prefix-anchored rather than substring-anchored, carried over deliberately
+#   from the original sponsor list: a contains-match let "Applied Materials"
+#   hit "Johns Hopkins Applied Physics Laboratory" during testing there. Keep
+#   entries as the SHORTEST distinctive form of the name -- "Capital One", not
+#   "Capital One Financial Corporation".
+#
+# MAINTENANCE
+#   Add a company: put it in the group that fits, shortest distinctive name.
+#   Delete a whole group you've lost interest in -- the loader flattens
+#   whatever groups remain, so removing one changes nothing else.
+
+notify:
+  # --- Big tech -------------------------------------------------------------
+  big_tech:
+    - Amazon
+    - Google
+    - Microsoft
+    - Apple
+    - Meta
+    - Netflix
+    - NVIDIA
+    - Intel
+    - IBM
+    - Oracle
+    - Cisco
+    - Salesforce
+    - Adobe
+    - Qualcomm
+    - LinkedIn
+    - Uber
+    - Airbnb
+    - PayPal
+    - ServiceNow
+    - Atlassian
+    - Palantir
+    - Dell Technologies
+    - Hewlett Packard Enterprise
+    - HP
+    - Motorola
+    - TikTok
+    - ByteDance
+    - Spotify
+    - Snap
+    - Reddit
+    - DoorDash
+    - Instacart
+
+  # --- Software, infra, dev tools, security ---------------------------------
+  software_and_infra:
+    - Snowflake
+    - Databricks
+    - MongoDB
+    - Datadog
+    - Cloudflare
+    - Stripe
+    - Block
+    - Square
+    - Okta
+    - CrowdStrike
+    - Palo Alto Networks
+    - GitLab
+    - Figma
+    - Notion
+    - Vercel
+    - Airtable
+    - Rippling
+    - Ramp
+    - HashiCorp
+    - Elastic
+
+  # --- AI / ML labs and platforms --------------------------------------------
+  ai_and_ml:
+    - Anthropic
+    - OpenAI
+    - xAI
+    - Scale AI
+    - Cohere
+    - Hugging Face
+    - Perplexity
+    - Runway
+    - Groq
+    - Cerebras
+    - SambaNova
+    - Together AI
+    - Weights & Biases
+    - Physical Intelligence
+
+  # --- Semiconductors and hardware -------------------------------------------
+  semiconductors_and_hardware:
+    - AMD
+    - Broadcom
+    - Marvell
+    - Micron
+    - Texas Instruments
+    - Analog Devices
+    - Microchip Technology
+    - Infineon
+    - STMicroelectronics
+    - NXP Semiconductors
+    - GlobalFoundries
+    - Applied Materials
+    - Lam Research
+    - KLA
+    - ASML
+    - Synopsys
+    - Cadence Design Systems
+    - Arm
+    - SiFive
+    - Western Digital
+    - Seagate
+    - Nokia
+    - Ericsson
+    - Samsung
+    - Sony
+
+  # --- Aerospace, defense, and robotics ---------------------------------------
+  # The reason this group exists at all -- these rarely showed up on the old
+  # bot's radar because cleared-defense primes were deliberately excluded from
+  # the sponsor list there (see git history). None of that logic applies here.
+  aerospace_defense_and_robotics:
+    - Blue Origin
+    - SpaceX
+    - Boeing
+    - Lockheed Martin
+    - Northrop Grumman
+    - RTX
+    - Raytheon
+    - L3Harris
+    - General Dynamics
+    - Honeywell
+    - Anduril
+    - Rocket Lab
+    - Firefly Aerospace
+    - Relativity Space
+    - Sierra Space
+    - Redwire
+    - Axiom Space
+    - Astranis
+    - Varda Space Industries
+    - Boston Dynamics
+    - Figure AI
+    - Agility Robotics
+    - Skydio
+    - Shield AI
+    - Joby Aviation
+    - Archer Aviation
+    - Zipline
+    - Aurora Innovation
+    - Waymo
+    - Zoox
+    - Nuro
+    - GE Aerospace
+    - Collins Aerospace
+    - Textron
+
+  # --- Automotive and mobility -------------------------------------------
+  automotive_and_mobility:
+    - Tesla
+    - Rivian
+    - Lucid Motors

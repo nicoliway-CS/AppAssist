@@ -1,10 +1,10 @@
-# Job Alert Bot
+# Internship Alert Bot
 
-Watches public job-listing repos, filters them down to **EU roles** (UK excluded) or **US roles that plausibly sponsor work visas**, and posts new matches to a Discord channel. It also publishes a browsable board of everything currently open to GitHub Pages.
+Watches public internship-listing repos, filters them down to **US internships/co-ops** in **Software Engineering, Embedded Systems, or Hardware Engineering**, and posts matches from a curated company list to a Discord channel. It also publishes a browsable board of everything currently open to GitHub Pages, filterable by category, company, and notify status.
 
 Runs entirely on GitHub Actions cron — no server, no database, no hosting bill. State is a single JSON file committed back to the repo.
 
-Built for a new-grad CS job search spanning both regions, where the two questions that actually matter are *"is this in the EU?"* and *"will this US company sponsor me?"* — neither of which the upstream sources answer reliably. Most of what follows is about closing that gap.
+Built for a US-citizen CS undergrad not graduating until 2028, where sponsorship and country-of-residence aren't the question — the two that matter are *"is this in Software Engineering, Embedded Systems, or Hardware Engineering?"* and *"is it a company I actually want a ping for?"* This started as a fork of a bot built for the opposite problem (EU-location-or-visa-sponsorship filtering for an international candidate); most of what follows is about how the filtering logic changed shape, not just what it excludes.
 
 ## Setup
 
@@ -25,83 +25,54 @@ python tests/test_core.py           # sanity checks
 python scripts/render_board.py -o site/index.html    # build the board locally
 ```
 
-Everything tunable lives in [config/](config/) — sources, adapters, location lists, title exclusions, and the sponsor list. Adding a source, a city, or flipping a rule needs no code change.
+Everything tunable lives in [config/](config/) — sources, role-category keyword lists, and the notify-list companies. Adding a source, a keyword, or a company needs no code change.
 
 ## How it decides
 
-A posting is kept if its **title isn't excluded** AND **(EU location)** OR **(US location AND sponsorship is plausible)**.
+A posting is kept if it is **US-located** AND **looks like an internship/co-op** AND **its title matches at least one role category** (Software Engineering, Embedded Systems, or Hardware Engineering).
 
-Title exclusion runs first, driven by `exclude_title_patterns` in [config/sources.yaml](config/sources.yaml) — internship terms, clearance markers (`TS/SCI`, `poly`, `ITAR`, `US citizen`…), and non-CS role families (sales, field service, retail, back-office). Terms match **whole words** against the normalized title, so `intern` drops "Software Engineer Intern" but leaves "International Tax Analyst" and "Internal Tools Engineer" alone, and `sci` never touches "Computer Science". That whole-word rule is why each suffix form is listed separately.
+**US-only.** US detection runs the same city-name-collision guard the original EU-vs-US bot needed: Dublin CA/OH, Berlin NH, Paris TX, Vienna VA and Naples FL are all real US tech locations, and both source boards carry Canada/EU postings too (vanshb03's board explicitly says it covers "the United States, Canada, or Remote"). Multi-location postings qualify if *any one* location is US.
 
-The list is **global** — it prunes every source at once. Before adding a term, check it against the whole pool; several obvious-looking ones are traps, and each is recorded inline in the config alongside the CS role it would have cost:
+**Internship-only.** Enforced two ways: primarily by only watching internship-scoped source repos (see [Sources](#sources)), with a title-based fallback (`require_internship_title_patterns` in [config/sources.yaml](config/sources.yaml)) that drops anything lacking internship/co-op wording — this is what catches a new-grad req that leaks into an internship board.
 
-| Tempting term | What it kills | Used instead |
-|---|---|---|
-| `assurance` | Quality **Assurance** Engineer | — |
-| `hardware` | SWE New Grad – **Hardware** Tools | `hardware engineer` |
-| `assistant` | Research **Assistant**/Programmer | — |
-| `marketing` | ML New Grad (…**Marketing** Analytics) | `marketing digital` |
-| `commercial` | Forward Deployed SWE – **Commercial** | — |
-| `recruitment` | SWE AI/LLM – Global Frontier Tech **Recruitment** Program | `recruiter` |
-| `support` | AI / Application **Support** Engineer | — |
+**Role category.** [config/role_categories.yaml](config/role_categories.yaml) is a positive keyword screen — the title must look like the target role, run per-category so a posting can earn more than one tag ("Embedded Software Engineer Intern" is genuinely both Software Engineering and Embedded Systems). A title matching none of the three is dropped, same as the old bot's non-CS handling, unless `enable_other_category` is turned on to audit for keyword gaps. Bare single words are avoided in the category lists on purpose — "engineer" alone would tag every Sales Engineer and Field Applications Engineer posting, so most patterns are qualified phrases ("software engineer", "asic design") instead. [config/sources.yaml](config/sources.yaml)'s `exclude_title_patterns` is now short: with the category screen doing the "is this CS/CE" work, there's much less non-CS noise left to name explicitly, and what's there is either a sales/recruiting/legal title or a specific trap (`sales engineer`, `solutions engineer` — pre-sales technical roles that would otherwise ride the word "engineer").
 
-[tests/test_core.py](tests/test_core.py) asserts all of these still pass the filter, so a retune that reintroduces a bare term fails the suite instead of quietly dropping CS roles.
+One deliberate reversal from the original bot: clearance/citizenship terms (`TS/SCI`, `polygraph`, `ITAR`, `US citizen required`...) are **not** excluded here. Those existed to protect an international candidate who could never clear them. A US citizen isn't blocked by a posting merely announcing a clearance requirement, and cleared defense/aerospace roles are exactly what [config/notify_companies.yaml](config/notify_companies.yaml) exists to surface.
 
-US detection runs **first and wins**. This matters more than it sounds: Dublin CA/OH, Berlin NH, Paris TX, Vienna VA and Naples FL are all real US tech locations that would otherwise false-positive as EU.
-
-Multi-location postings qualify if *any one* location matches, so a "London | Milan | NYC" role comes through on Milan.
+Simplify's own `category` field (Software/Hardware/AI-ML-Data/Product/Quant) was checked before writing the keyword screen and rejected as a filter: sampled 2026-09, its "Hardware" bucket contained "Software Development Intern" and "Embedded Software Engineer Intern" alongside real hardware roles — the same kind of unreliable tag the old EU source's `role_family` field was.
 
 ## Sources
 
 | Source | Adapter | Format |
 |---|---|---|
-| [SimplifyJobs/New-Grad-Positions](https://github.com/SimplifyJobs/New-Grad-Positions) | `simplify_json` | 12.9MB `listings.json` |
-| [vanshb03/New-Grad-2026](https://github.com/vanshb03/New-Grad-2026) | `markdown_table` | README pipe table |
-| [Aramente/eu-tech-jobs](https://github.com/Aramente/eu-tech-jobs) | `eu_parquet` | daily Parquet snapshot |
+| [SimplifyJobs/Summer2027-Internships](https://github.com/SimplifyJobs/Summer2027-Internships) | `simplify_json` | listings.json |
+| [vanshb03/Summer2027-Internships](https://github.com/vanshb03/Summer2027-Internships) | `markdown_table` | README pipe table |
 
 A source that 404s or changes shape is logged and skipped; the others still run.
 
 ### Quirks worth knowing
 
-The two US repos are new-grad lists and between them produce **zero** EU matches — the EU half of the bot was dead until `eu-tech-jobs` was added. Other things that surprised on contact with live data:
-
-- **~84% of Simplify rows are inactive** (closed postings), filtered out via `require_active`.
-- **99.3% of Simplify rows report sponsorship as `Other`** — meaning *unspecified*, not *offered*. Only 22 of 18,364 said `Offers Sponsorship`. This is the entire reason the company list below exists.
-- **Markdown-table dates have no year** (`Aug 05`). The year is inferred as the most recent one that isn't in the future, allowing one day of clock skew. The window has to be tight: the README is a rolling year-long list, so `Aug 28` seen on `Aug 26` is last year's posting, not one two days from now.
-- **Sources routinely publish no date at all** — ~29% of the EU snapshot has a null `posted_at`. Those postings carry an empty `date_posted` rather than the run's own timestamp, and the board groups them as *Undated*.
-- `SimplifyJobs/Summer2027-Internships` serves a byte-identical file to `Summer2026` — a mirror, so it isn't configured as a separate source.
-
-### The `eu_parquet` adapter
-
-`eu-tech-jobs` is a different kind of source and the adapter reflects that:
-
-- **Parquet, read over HTTP Range requests.** The file is 19.2MB but 17.8MB of that is a `description_md` column the bot never displays. Reading only the needed columns pulls **1.5MB in ~9 requests**. It's a single row group, so column pruning is the only lever available. This is the sole reason `pyarrow` is a dependency; if the import fails, that one source is skipped and the run continues.
-- **Two files.** `jobs.parquet` carries only a `company_slug` (`wttj-capgemini`), so `companies.parquet` (78KB, plain GET) is joined for display names.
-- **It's a firehose, not a curated list.** ~20k live rows, no new-grad concept, and the upstream LLM tagger lags the scraper — `role_family` is null on 50% of rows and `seniority` on 75%, including nearly every brand-new row. Untagged rows are therefore **kept**, since requiring a tag would discard exactly the newest postings. Per-option measurements are recorded in the config.
-- **A blocklist alone could not hold it.** Because untagged rows bypass the `role_family` allowlist, **68%** of everything getting through had been screened by nothing but the global `exclude_title_patterns` terms — and on a general EU job board spanning four languages, the tail of non-CS role words is effectively unbounded. An entire French recruitment agency (maintenance electricians, sawmill operators), ~30 AstraZeneca Medical Science Liaison roles, Deliveroo warehouse pickers and two kindergarten-teacher posts were all arriving in the channel. `require_title_patterns` inverts it into a **positive screen** — the title must look like a CS role — taking the source from **1,837 to 963** matches. Every term was probed for precision first; `technical`, `technique`, `tech`, bare `administrator` and bare `analyst` were all tried and rejected, and what each would have dragged in is recorded in `src/fetch.py`.
-- **`ingenieur` is not `engineer`.** The positive screen keeps bare English `engineer` (201 rows it uniquely admits, nearly all real — a tech employer saying just "Engineer" usually means software) but *not* bare French `ingenieur`, which is any discipline. That one word uniquely admitted 85 rows: B-HIVE HVAC and railway engineers, Thales electronics-repair, EDF nuclear, VINCI civil works. Qualified phrases plus `algorithmie` / `intelligence artificielle` / `embarque` recover the genuinely CS ones.
-- **The upstream `engineering` tag is not a software signal.** It covers 1KOMMA5°'s photovoltaic *Elektriker*, HelloFresh's *Mechatroniker Instandhaltung* and Trigo's Hungarian mechanical *Mérnök*. The positive screen therefore runs on tagged rows too, not just untagged ones — worth a further 55 drops.
-- **Four of its columns are dead.** `stack` and `languages` are empty on all 20,120 rows, `visa_sponsorship` is 100% null, and `remote_policy` is null on 92.8%. None are usable as filters, despite what the published schema suggests. Company `categories` is nearly as flat — 1,474 of 1,732 companies are just `tech`. The `visa_sponsorship` gap is harmless: these are EU-located roles, so they pass on location, not sponsorship.
-- **Consumer fashion/beauty brands are dropped.** The upstream repo carries ~400 of them for a separate landing page it runs — ~1,750 live jobs, mostly Paris-based, so they pass the EU location check. Its own public site filters them on the same `industry_tags`.
+- **Despite the "2027" name, both repos are the actively-maintained boards**, not a single-season list. Simplify's currently carries Summer 2026 (mostly closed now), Fall 2026, and Winter/Spring/Summer 2027 postings together — `require_active` is what keeps the closed Summer 2026 backlog out, the same mechanism the old bot used for the same reason.
+- **~81% of Simplify rows are inactive** (closed postings), filtered out via `require_active`.
+- **vanshb03's 🛂 marker flipped meaning between repo eras.** In the old New-Grad-2026 table it meant "sponsors internationals"; in the current Summer2027-Internships table it means "does NOT offer sponsorship," per that repo's own legend. Harmless here — `sponsorship_flag` isn't read anywhere in this pipeline — but a future feature built on that field needs to re-check the legend, not assume it.
+- **Markdown-table dates have no year** (`Aug 05`). The year is inferred as the most recent one that isn't in the future, allowing one day of clock skew, for the same reason the original bot needed this: the README is a rolling list, so a date that reads as "the near future" is actually last year's posting.
 
 ## The daily board
 
 Discord is a queue: good for "what's new in the last hour", useless for browsing. [scripts/render_board.py](scripts/render_board.py) renders every currently-open match into one self-contained HTML page, and [.github/workflows/board.yml](.github/workflows/board.yml) rebuilds it once a day and publishes it to GitHub Pages.
 
-Search, per-tier filter chips, and a reviewed-checkbox with a progress meter. Review state lives in `localStorage`, so it's per-browser and survives the daily rebuild — ids that leave the board are pruned from it.
+Search, category filter chips, a company filter, a notified/not distinction, and a reviewed-checkbox with a progress meter — all client-side, all composable (searching within a filtered category doesn't reset the category, filtering by company doesn't reset the notified toggle, etc.).
 
-**Dates.** Day headings are the *source's* posting date and are shown exactly as published. A posting the source gave no date for is filed under **Undated** at the foot of the page — never dated to the day the page was built. About a third of the EU feed arrives with a null `posted_at`, so this group is large; it does not mean those postings are old. The build timestamp in the masthead is rendered in US Eastern with the zone named, so it always agrees with the reader's calendar.
+**The board shows everything; Discord shows less.** Every posting that passes the location/internship/category filters lands on the board regardless of company. Discord only fires for a company in [config/notify_companies.yaml](config/notify_companies.yaml) — that's the noise control, not the board's. A row from a notify-list company is badged **📣 Notified**, and the "Notified only" chip filters to just that slice; everything else on the board still passed every real filter, it just isn't a company you asked to be pinged for.
 
-**The board shows more than the channel does.** It forces `allow_unknown_sponsorship: true`, so the *sponsorship unverified* tier is visible there even when `config/sources.yaml` keeps it out of Discord. That's the point: it's where the deliberately-withheld matches go. Rows first seen within the last 24h are badged **NEW**.
-
-| Tier | Meaning |
+| Category | Meaning |
 |---|---|
-| Sponsorship confirmed | The listing itself says so |
-| EU location | No visa question (UK excluded) |
-| Known H-1B employer | Company files petitions (USCIS FY22–23) |
-| Sponsorship unverified | No signal either way — **not sent to Discord** |
+| Software Engineering | General SWE, backend, frontend, full-stack |
+| Embedded Systems | Firmware, RTOS, microcontrollers, IoT |
+| Hardware Engineering | PCB, ASIC/VLSI, digital design |
+| Other | Only appears if `enable_other_category` is on — matched no category, kept for a keyword-gap audit |
 
-Postings older than 60 days are dropped (`--max-age-days`). At ~3,300 rows the page is ~850KB, fully inline, no external requests.
+Postings older than 60 days are dropped (`--max-age-days`).
 
 ### Setting up Pages
 
@@ -115,61 +86,37 @@ The cron is `17 11 * * *` (11:17 UTC = 7:17 AM US Eastern during EDT, 6:17 AM du
 
 This workflow is the only thing that rebuilds the page. If the board looks like it updated twice in one day, check the Actions tab for a manual `workflow_dispatch` run.
 
-## Sponsorship: why there's a company list
+## Notify list: why there's a curated company file
 
-The sources' own `sponsorship` field is close to useless. Measured against the live pool:
+[config/notify_companies.yaml](config/notify_companies.yaml) replaces the old `h1b_sponsors.yaml`. There is no external data behind it and no eligibility question it's answering — it's just "companies worth a Discord ping," seeded with big tech plus the aerospace/defense/robotics names relevant to embedded and hardware work (Blue Origin, SpaceX, Honeywell, RTX, Northrop Grumman, Boston Dynamics...). Unlike the old sponsor list, cleared-defense primes are **included** here on purpose — the reason they were excluded before (an international candidate can't clear a clearance requirement) doesn't apply to a US citizen.
 
-- **28** active US postings say "Offers Sponsorship" — about 0.08/day, with some weeks at zero.
-- **8** say citizenship is required.
-- **~99%** say `Other`, which means *unspecified*, not *offered*.
+Matching is the same exact-or-prefix scheme the sponsor list used: normalized company names match exactly or as a prefix, so "Amazon" covers "Amazon Web Services" and "Amazon Robotics" without a separate entry, and prefix-anchoring (not substring) avoids the false positive that motivated it originally — a contains-match let "Applied Materials" hit "Johns Hopkins Applied Physics Laboratory".
 
-So gating on the field makes the bot silent, and ignoring it floods the channel with cleared-defense roles that were never going to sponsor. [config/h1b_sponsors.yaml](config/h1b_sponsors.yaml) is the middle path: a company-level signal seeded from the **USCIS H-1B Employer Data Hub** (FY2022+FY2023), matched against the names that actually appear in the feeds and hand-cleaned, since USCIS records legal entities (`AMAZON.COM SERVICES LLC`) while postings use trade names (`Amazon`).
-
-US postings resolve in this order:
-
-| Source flag | Company on the list | Result |
-|---|---|---|
-| `no` | — | dropped (citizenship required) |
-| `yes` | — | sent, verified |
-| `unknown` | yes | sent, **🛂 Known H-1B employer** |
-| `unknown` | no | sent ⚠️ unverified, or dropped if `allow_unknown_sponsorship: false` |
-
-That last row is the volume dial: `true` gives ~50/day with the good ones visually distinguishable, `false` gives ~28/day of known sponsors only.
-
-**This is a company-level signal, not a promise about a specific req.** Amazon has GovCloud roles and Apple has US-persons-only work; the clearance title patterns catch the ones that say so in the title, but some will slip through. The Discord embed says "Known H-1B employer", not "this role sponsors", deliberately.
-
-Names match **exact-or-prefix** on the normalized company, so `Amazon` covers "Amazon Web Services". Prefix-anchored rather than substring, because a contains-match let `Applied Materials` hit "Johns Hopkins Applied Physics Laboratory" in testing. Cleared-defense primes (Northrop, RTX, L3Harris, CACI, Leidos, Peraton, SpaceX, JHU APL…) are **deliberately absent** even though a few appear in USCIS data with small counts.
-
-Coverage is roughly **55%** of US postings. The unmatched residue is dominated by exactly the employers you'd expect — SpaceX, Northrop Grumman, RTX, Johns Hopkins APL, General Dynamics, Peraton.
-
-FY2024+ USCIS data exists only inside a Tableau dashboard with no CSV export, so FY2023 is the newest bulk source. That's acceptable here: *whether* a company sponsors is stable year over year.
+This list is meant to be hand-edited. Add or remove companies freely; deleting a whole group changes nothing else, since the loader flattens whatever groups remain.
 
 ## Dedupe key
 
 `sha1(normalized_company + normalized_title + MMDDYYYY_posting_date)`
 
 - **Date included** so the same role reposted months later is treated as genuinely new.
-- **URL and source id excluded** — the same job appears in multiple repos with different tracking URLs and different UUIDs. Keying on either notifies twice for one job. In testing this collapsed 7 cross-repo duplicates out of 68 matches.
-- **`Aramente/eu-tech-jobs` is the one exception**: it keys on the source's own id instead. Its `posted_at` is not stable — 1.2% of jobs present in both the 2026-08-18 and 2026-08-24 snapshots had the date bumped forward (welcometothejungle re-dates listings it re-promotes), and under the shared key every bump mints a new id and re-notifies a job already sent, ~24/day of pure duplicates. The rule above exists for cross-source collisions, and this source has none: run against both US repos through the real filter, the overlap was exactly **0** postings. Revisit if a source is ever added that spans both regions.
+- **URL and source id excluded** — the same job appears in multiple repos with different tracking URLs and different UUIDs. Keying on either notifies twice for one job.
 - **Company suffixes, case, emoji and diacritics normalized**, so `Acme, Inc.` and `ACME` are one job.
 - When a source publishes **no date**, the date the bot first saw the posting is used. Without that fallback the slot would be empty and a repost would silently collide with the original — the exact case the date is there to catch.
 
 ## First run
 
-The first run **seeds state silently and sends nothing**. With ~33,000 postings across the sources, notifying on the backlog would mean hundreds of Discord messages.
+The first run **seeds state silently and sends nothing**. With well over ten thousand postings across the sources, notifying on the backlog would mean hundreds of Discord messages.
 
-Every run afterward notifies only on new matches. To re-seed from scratch, run the workflow with the `reseed` input checked, or `python src/main.py --reseed`.
+Every run afterward notifies only on new matches from a notify-list company. To re-seed from scratch, run the workflow with the `reseed` input checked, or `python src/main.py --reseed`.
 
-`max_notifications_per_run` (default 60) caps a single run. If a source reformats and suddenly looks like 5,000 new jobs, you get 60 and the rest defer — not a channel flood.
+`max_notifications_per_run` (default 60) caps a single run. If a source reformats and suddenly looks like thousands of new jobs, you get 60 and the rest defer — not a channel flood.
 
-**Adding a source to an already-seeded state has the same problem as a first run**, and the cap doesn't save you — it only spreads it out. Adding `eu-tech-jobs` put 2,671 unseen matches in front of the bot, which at 60/run drains over ~44 hourly runs. Re-seed once so the existing pool counts as old news, and review it out-of-band:
+**If you're switching an existing seeded state over to this filtering scheme** (i.e. running this refactor against a `state/seen.json` seeded under the old EU/sponsorship rules), the same problem as a first run applies: postings that were never candidates before (US internships from notify-list companies) will look "new" all at once. Re-seed once so the existing pool counts as old news, and review it out-of-band:
 
 ```bash
 python src/main.py --reseed          # record everything live, send nothing
 python scripts/backlog_dump.py       # dump the pool to backlog.md instead
 ```
-
-Steady state after that is the true daily delta — roughly 73/day from `eu-tech-jobs`, landing in a single run just after its 07:00 CET rebuild and draining over the next two.
 
 ## Weekly heartbeat
 
@@ -186,15 +133,13 @@ Preview without sending: `gh workflow run heartbeat.yml -f dry_run=true`.
 
 ## Cost and cadence
 
-On a **public** repo, Actions minutes are unlimited and none of this matters. On a **private** one, every job bills as a whole minute rounded up, even though a check takes ~16 seconds. Against the Free tier's 2,000 private-repo minutes/month:
+On a **public** repo, Actions minutes are unlimited and none of this matters. On a **private** one, every job bills as a whole minute rounded up, even though a check takes well under a minute. Against the Free tier's 2,000 private-repo minutes/month:
 
 | Cadence | Minutes/month | % of free tier |
 | --- | --- | --- |
 | Every 30 min | ~1,460 | 73% |
 | **Hourly (default)** | **~730** | **37%** |
 | Every 2 hours | ~365 | 18% |
-
-Hourly is the configured default: the sources only update a few times a day, so anything faster buys nothing and leaves no headroom.
 
 Exhausting the allowance doesn't charge you — the default spending limit is $0, so Actions simply stops until the next billing cycle. That's precisely the silent failure the heartbeat exists to catch.
 
@@ -223,11 +168,11 @@ Running this in public exposes what you're looking at. Worth deciding deliberate
 .github/workflows/heartbeat.yml    weekly liveness report
 .github/workflows/board.yml        daily Pages build + deploy
 config/sources.yaml                source repos, adapters, tunables
-config/eu_locations.yaml           country/city/remote match lists
-config/h1b_sponsors.yaml           curated USCIS-seeded sponsor list
+config/role_categories.yaml        role-category keyword screen (SWE/embedded/hardware)
+config/notify_companies.yaml       curated companies that page Discord
 src/fetch.py                       per-source adapters
-src/normalize.py                   text/date normalization, dedupe key
-src/filter.py                      location + sponsorship rules
+src/normalize.py                   text/date normalization, dedupe key, term-pattern compiler
+src/filter.py                      US-location + internship + role-category rules
 src/notify_discord.py              batched embeds, retry/backoff
 src/main.py                        orchestration
 src/heartbeat.py                   weekly status + minutes estimate
@@ -240,10 +185,9 @@ tests/test_core.py                 sanity checks
 
 ## Credits
 
-This bot aggregates three community-maintained listing repos and adds filtering on top. All the actual listing work is theirs:
+This bot aggregates two community-maintained internship-listing repos and adds filtering on top. All the actual listing work is theirs:
 
-- [SimplifyJobs/New-Grad-Positions](https://github.com/SimplifyJobs/New-Grad-Positions)
-- [vanshb03/New-Grad-2026](https://github.com/vanshb03/New-Grad-2026)
-- [Aramente/eu-tech-jobs](https://github.com/Aramente/eu-tech-jobs) — data CC BY 4.0, pipeline MIT
+- [SimplifyJobs/Summer2027-Internships](https://github.com/SimplifyJobs/Summer2027-Internships)
+- [vanshb03/Summer2027-Internships](https://github.com/vanshb03/Summer2027-Internships)
 
-Sponsorship data derives from the [USCIS H-1B Employer Data Hub](https://www.uscis.gov/tools/reports-and-studies/h-1b-employer-data-hub) (public domain).
+Forked from a version of this bot built for EU-location-or-US-visa-sponsorship filtering; that lineage is why the US-location detection and dedupe-key design look the way they do.

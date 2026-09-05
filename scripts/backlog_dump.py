@@ -7,7 +7,7 @@ already in seen.json from a cutoff date onward, so the backlog can be read in
 one sitting.
 
 seen.json stores only {first_seen, company, title} -- no location, URL, or
-sponsorship flag -- so the postings have to be re-fetched from the sources and
+category -- so the postings have to be re-fetched from the sources and
 matched back by id. Anything the sources have since dropped (closed reqs) is
 simply gone and cannot be recovered; the run reports how many that was.
 
@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from fetch import fetch_source  # noqa: E402
-from filter import filter_postings  # noqa: E402
+from filter import CompanyMatcher, filter_postings  # noqa: E402
 
 log = logging.getLogger("backlog")
 
@@ -54,12 +54,21 @@ def posted_at(posting: dict) -> datetime | None:
         return None
 
 
+CATEGORY_LABELS = {
+    "software_engineering": "Software Engineering",
+    "embedded_systems": "Embedded Systems",
+    "hardware_engineering": "Hardware Engineering",
+    "other": "Other",
+}
+
+
 def render(postings: list[dict], cutoff: datetime, missing: int) -> str:
-    """Markdown grouped by sponsorship confidence, newest first within a group."""
-    badged = [p for p in postings if p.get("known_sponsor")]
-    explicit = [p for p in postings if p.get("sponsorship_flag") == "yes"]
-    eu = [p for p in postings if str(p.get("match_reason", "")).startswith("EU")]
-    unverified = [p for p in postings if p.get("unverified")]
+    """Markdown grouped by role category, newest first within a group."""
+    by_category = {key: [] for key in CATEGORY_LABELS}
+    for p in postings:
+        for key in (p.get("role_categories") or ["other"]):
+            by_category.setdefault(key, []).append(p)
+    notified = [p for p in postings if p.get("_notified")]
 
     lines = [
         f"# Backlog since {cutoff:%B %-d, %Y}" if sys.platform != "win32"
@@ -67,12 +76,12 @@ def render(postings: list[dict], cutoff: datetime, missing: int) -> str:
         "",
         f"{len(postings)} postings already in `seen.json` that pass current screening.",
         "",
-        f"- 🛂 Explicit sponsorship: **{len(explicit)}**",
-        f"- 🛂 Known H-1B employer: **{len(badged)}**",
-        f"- 🇪🇺 EU location: **{len(eu)}**",
-        f"- ⚠️ Sponsorship unverified: **{len(unverified)}**",
-        "",
     ]
+    for key, label in CATEGORY_LABELS.items():
+        if by_category.get(key):
+            lines.append(f"- {label}: **{len(by_category[key])}**")
+    lines.append(f"- 📣 On the notify list: **{len(notified)}**")
+    lines.append("")
     if missing:
         lines += [
             f"> {missing} other ids in `seen.json` are not in the live feeds and "
@@ -83,12 +92,7 @@ def render(postings: list[dict], cutoff: datetime, missing: int) -> str:
             "",
         ]
 
-    groups = [
-        ("Explicit sponsorship", explicit),
-        ("EU location", eu),
-        ("Known H-1B employer", badged),
-        ("Sponsorship unverified", unverified),
-    ]
+    groups = [(label, by_category.get(key, [])) for key, label in CATEGORY_LABELS.items()]
     emitted: set[str] = set()
     for heading, group in groups:
         rows = [p for p in group if p["id"] not in emitted]
@@ -126,12 +130,15 @@ def main() -> int:
     cutoff = parse_cutoff(args.since)
 
     sources_config = yaml.safe_load((ROOT / "config" / "sources.yaml").read_text(encoding="utf-8"))
-    locations_config = yaml.safe_load((ROOT / "config" / "eu_locations.yaml").read_text(encoding="utf-8"))
-    sponsors_config = yaml.safe_load((ROOT / "config" / "h1b_sponsors.yaml").read_text(encoding="utf-8")) or {}
+    role_categories_config = yaml.safe_load(
+        (ROOT / "config" / "role_categories.yaml").read_text(encoding="utf-8")
+    )
+    notify_path = ROOT / "config" / "notify_companies.yaml"
+    notify_config = (yaml.safe_load(notify_path.read_text(encoding="utf-8")) or {}) \
+        if notify_path.exists() else {}
+    notify_matcher = CompanyMatcher(notify_config)
 
-    # The whole point of the catch-up: unverified US roles included.
     settings = dict(sources_config.get("settings", {}) or {})
-    settings["allow_unknown_sponsorship"] = True
 
     state = json.loads((ROOT / "state" / "seen.json").read_text(encoding="utf-8"))
     seen = set(state.get("postings", state if isinstance(state, dict) else {}))
@@ -144,7 +151,9 @@ def main() -> int:
         log.error("no postings fetched -- nothing to report")
         return 1
 
-    matches = filter_postings(postings, locations_config, settings, sponsors_config)
+    matches = filter_postings(postings, settings, role_categories_config)
+    for posting in matches:
+        posting["_notified"] = notify_matcher.matches(posting.get("company", ""))
 
     # Dedupe before the window test: the same id can arrive from two repos.
     by_id: dict[str, dict] = {}

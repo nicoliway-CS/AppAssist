@@ -138,6 +138,34 @@ def _resolve_yearless(month: int, day: int, now: datetime) -> datetime | None:
     return None
 
 
+def compile_term_patterns(patterns) -> re.Pattern | None:
+    """One alternation matching any term as a whole word/phrase, or None.
+
+    Boundaries are hand-rolled rather than \\b because term lists carry stack
+    names like "c++", "c#" and ".net": \\b after "+" demands a word character,
+    so r"\\bc\\+\\+\\b" can never match and the term would silently do nothing.
+    The lookarounds below apply only on the sides where the term actually
+    starts or ends with an alphanumeric, which handles both shapes.
+
+    Whole-word/phrase matching matters generally: a substring test on "sr"
+    hits "Ambassador", "ai" hits "email", "intern" hits "International", and
+    "lead" hits "Leader". None of that is exotic -- it happened during tuning.
+
+    None (rather than an empty regex) signals "no patterns configured", so
+    callers can treat an absent/empty list as "screen nothing" without a
+    special case.
+    """
+    terms = [normalize_text(p) for p in (patterns or []) if p]
+    if not terms:
+        return None
+    parts = []
+    for term in terms:
+        prefix = r"(?<![a-z0-9])" if term[:1].isalnum() else ""
+        suffix = r"(?![a-z0-9])" if term[-1:].isalnum() else ""
+        parts.append(prefix + re.escape(term) + suffix)
+    return re.compile("|".join(parts))
+
+
 def make_id(company: str, title: str, date_mmddyyyy: str) -> str:
     """Stable dedupe key: normalized company + title + MMDDYYYY posting date.
 

@@ -1,434 +1,118 @@
 # Source repos to watch.
 #
-# adapter: "simplify_json" | "markdown_table" | "eu_parquet"
+# adapter: "simplify_json" | "markdown_table"
 #   simplify_json  -> Simplify-style listings.json (list of posting objects)
 #   markdown_table -> README with a | Company | Role | Location | Link | Date | table
-#   eu_parquet     -> Aramente/eu-tech-jobs daily Parquet snapshot (see below)
 #
 # A failing source is logged and skipped; it never aborts the run.
+#
+# Both sources below are the CURRENT internship-cycle repos, not the old
+# new-grad ones. Verified 2026-09 against the live files before switching:
+#
+#   SimplifyJobs/Summer2027-Internships -- same listings.json shape as the old
+#   New-Grad-Positions repo (company_name, title, locations list, url,
+#   sponsorship enum, epoch date_posted, active, is_visible). It also ships a
+#   `category` field (Software / Hardware / AI-ML-Data / Product / Quant) that
+#   looked tempting as a shortcut, but sampling it turned up "Software
+#   Development Intern" and "Embedded Software Engineer Intern" both filed
+#   under "Hardware" -- unusable as a filter, same problem the eu-tech-jobs
+#   role_family tag had. See config/role_categories.yaml for what's used
+#   instead. Despite the "2027" name it's the actively-maintained repo and
+#   currently carries Summer 2026 (mostly closed/inactive now), Fall 2026,
+#   and Winter/Spring/Summer 2027 postings all together -- require_active
+#   below is what keeps the closed Summer 2026 backlog out.
+#
+#   vanshb03/Summer2027-Internships -- same | Company | Role | Location |
+#   Application/Link | Date Posted | table shape as the old New-Grad-2026
+#   repo (that repo has since been renamed New-Grad-2027 upstream; not used
+#   here). One thing flipped between the two eras of this table: 🛂 used to
+#   mean "sponsors internationals" and here it means "does NOT offer
+#   sponsorship" per this repo's own legend. Harmless for this bot --
+#   sponsorship_flag isn't read anywhere in the internship-board pipeline --
+#   but don't resurrect a sponsorship feature against this field without
+#   re-checking the legend.
 
 sources:
-  - name: SimplifyJobs/New-Grad-Positions
+  - name: SimplifyJobs/Summer2027-Internships
     adapter: simplify_json
-    url: https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/.github/scripts/listings.json
+    url: https://raw.githubusercontent.com/SimplifyJobs/Summer2027-Internships/dev/.github/scripts/listings.json
 
-  - name: vanshb03/New-Grad-2026
+  - name: vanshb03/Summer2027-Internships
     adapter: markdown_table
-    url: https://raw.githubusercontent.com/vanshb03/New-Grad-2026/main/README.md
-
-  # The only source that actually produces EU matches -- the two US new-grad
-  # repos above have yielded exactly 0 (see backlog.md). Rebuilt daily ~07:00
-  # CET, so the whole day's delta lands in one hourly run and drains over the
-  # next couple at max_notifications_per_run.
-  #
-  # Unlike the others this is a general EU tech job board, not a new-grad list:
-  # ~20k live rows, no new-grad concept, and an LLM tagger that lags the
-  # scraper (role_family null on 50% of rows, seniority null on 75%, and null
-  # on nearly every brand-new row). The options below are what keep it from
-  # burying the other sources. Measured by diffing the 2026-08-18 and
-  # 2026-08-24 snapshots through the real filter:
-  #
-  #   role_families only, no seniority filter ... 5,600 corpus, ~181 new/day
-  #   + drop tagged senior/staff/principal ..... 4,379 corpus, ~182 new/day
-  #   + drop senior-sounding untagged titles ... 2,710 corpus, ~118 new/day
-  #   + engineering/ml-ai/data/research only ... 2,438 corpus, ~118 new/day  <- current
-  #
-  # Note the seniority tags alone buy nothing (182 vs 181): the tagger has not
-  # reached the new rows yet, so the title guard is what does the work.
-  - name: Aramente/eu-tech-jobs
-    adapter: eu_parquet
-    url: https://raw.githubusercontent.com/Aramente/eu-tech-jobs/main/data/latest/jobs.parquet
-    # slug -> display name. jobs.parquet only has "wttj-capgemini"-style slugs.
-    companies_url: https://raw.githubusercontent.com/Aramente/eu-tech-jobs/main/data/latest/companies.parquet
-    options:
-      # Rows tagged with a role_family outside this set are dropped. Untagged
-      # rows are KEPT -- see the tagger-lag note above. Full upstream enum:
-      # engineering / ml-ai / data / research / design / ops / product /
-      # sales / marketing / support / finance / hr / other.
-      role_families: [engineering, ml-ai, data, research]
-
-      # Rows the tagger has explicitly marked at these levels are dropped.
-      # "intern" is here as well as in exclude_title_patterns because the tag
-      # catches the ones whose title doesn't say so (V.I.E., alternance).
-      exclude_seniority: [senior, staff, principal, exec, intern]
-
-      # Positive screen: the title must contain one of these or the row is
-      # dropped. Applied to EVERY row, including ones the tagger labelled
-      # `engineering` -- that label covers electricians and civil-works site
-      # managers, so it is not a software signal. Full rationale and the
-      # per-term precision measurements are in _REQUIRED_TITLE_NOTE in
-      # src/fetch.py; the short version:
-      #
-      #   68% of surviving rows carry no role_family tag, so `role_families`
-      #   above never touched them and a blocklist was the only screening they
-      #   got. On a general EU job board across four languages that is a losing
-      #   game -- a whole French recruitment agency, AstraZeneca's Medical
-      #   Science Liaisons, Deliveroo warehouse pickers and two kindergarten
-      #   teacher posts were all getting through.
-      #
-      #   with role/seniority tuning only ......... 1,837 EU matches  <- was
-      #   + require_title_patterns ................ 1,041 EU matches
-      #   + bare "ingenieur" narrowed (see FR) .... 963 EU matches    <- now
-      #   recall on tagger-confirmed CS rows ...... 533/588 = 90.6%
-      #
-      # Comment this block out to restore the old behaviour; an absent or empty
-      # list means no positive screening at all.
-      #
-      # Before adding a term, probe what it actually recovers. "technical",
-      # "technique", "tech", bare "administrator", "crm" and bare "analyst"
-      # were all tried and rejected -- see the note in fetch.py for what each
-      # one dragged in. Matched whole-word against the normalized (lowercased,
-      # de-accented) title, so "ai" does not fire inside "email".
-      require_title_patterns:
-        # --- English core ------------------------------------------------
-        - software
-        - engineer
-        - engineering
-        - developer
-        - development
-        - programmer
-        - architect
-        - sre
-        - site reliability
-        - devops
-        - devsecops
-        - platform
-        - backend
-        - back end
-        - frontend
-        - front end
-        - fullstack
-        - full stack
-        - web
-        - mobile
-        - ios
-        - android
-        - embedded
-        - firmware
-        - systems
-        - infrastructure
-        - cloud
-        - network
-        - database
-        - data
-        - ml
-        - ai
-        - machine learning
-        - deep learning
-        - nlp
-        - computer vision
-        - llm
-        - analytics
-        - scientist
-        - research
-        - researcher
-        - cyber
-        - security
-        - cryptography
-        - algorithm
-        - optimization
-        - optimisation
-        - robotic
-        - robotics
-        - qa
-        - quality assurance
-        - test automation
-        - automation
-        - scrum
-        - system administrator     # phrase: bare "administrator" was rejected
-        - systemadministrator
-        - sysadmin
-        - it
-
-        # Named stacks. A title that is just "Java / Kotlin (m/w/d)" or
-        # "Analista Cobol" names no role at all, only the technology.
-        - java
-        - python
-        - golang
-        - rust
-        - javascript
-        - typescript
-        - react
-        - node
-        - angular
-        - vue
-        - kotlin
-        - swift
-        - scala
-        - ruby
-        - php
-        - c++
-        - c#
-        - .net
-        - dotnet
-        - sql
-        - kubernetes
-        - aws
-        - azure
-        - gcp
-        - salesforce
-        - sap
-        - abap
-        - erp
-        - dynamics
-        - servicenow
-        - zscaler
-        - mainframe
-        - cobol
-
-        # --- FR -----------------------------------------------------------
-        # NOTE: bare "ingenieur" is deliberately NOT here, unlike English
-        # "engineer". The two words are not equivalent in practice. Bare
-        # "engineer" uniquely admits 201 rows and they are overwhelmingly real
-        # ("Kernel/Linux Engineer", "Forward Deployed Engineer"), because in
-        # English a tech employer saying just "Engineer" usually means software.
-        # "Ingenieur" is any discipline, and this board carries French
-        # engineering consultancies in bulk: bare "ingenieur" uniquely admitted
-        # 85 rows, of which 22 were B-HIVE HVAC/electrical/railway/civil, 20
-        # were Thales hardware/electronics/radar-support, and the rest EDF
-        # nuclear, SOGECLAIR mechanical and VINCI civil works. The genuinely
-        # CS ones are recovered by the qualified phrases and terms below.
-        - developpeur
-        - developpeuse
-        - developpement logiciel
-        - ingenieur developpement
-        - ingenieur etudes et developpement
-        - ingenieur test
-        - informatique
-        - logiciel
-        - donnees
-        - reseau
-        - reseaux
-        - cybersecurite
-        - administrateur
-        - ia                  # "Consultant(e) IA"
-        - intelligence artificielle
-        - algorithme          # French forms: "algorithm" is whole-word, so it
-        - algorithmes         # does not reach "Algorithmie et Traitement"
-        - algorithmie
-        - embarque            # "Integration SW embarque", "systemes embarques"
-        - embarquee
-        - embarques
-
-        # --- DE -----------------------------------------------------------
-        - entwickler
-        - entwicklung
-        - informatiker
-        - softwareentwickler
-        - programmierer
-        - informatik
-
-        # --- IT / ES / PT / NL --------------------------------------------
-        - sviluppatore
-        - informatica
-        - desarrollador
-        - programador
-        - ingeniero
-        - desenvolvedor
-        - ontwikkelaar
-        - ciberseguridad
-        - cibersecurity       # sic -- NTT DATA's own spelling
-
-      # Consulted only for rows with NO seniority tag. Whole-word against the
-      # normalized title. This is the filter that actually moves the number.
-      senior_title_patterns:
-        - senior
-        - sr
-        - staff
-        - principal
-        - lead
-        - head
-        - director
-        - vp
-        - chief
-        - architect
-        - manager
-
-      # The upstream repo also tracks consumer fashion/beauty/luxury brands for
-      # a separate private landing page it runs. ~400 of its 1,732 companies
-      # and ~1,750 live jobs, overwhelmingly Paris-based -- so they pass the EU
-      # location check and would swamp everything else. Its own public site
-      # drops them on exactly these tags.
-      exclude_industry_tags:
-        - fashion
-        - beauty
-        - perfume
-        - home
-        - interior-design
-        - decoration
-        - textile
-        - retail-luxury
-
-  # NOTE: the two Summer2026-Internships repos (SimplifyJobs + vanshb03) were
-  # dropped Aug 2026. exclude_title_patterns discarded ~1,850 of their rows per
-  # run, so we were paying a ~10MB download to throw the results away. The few
-  # new-grad roles that leak into them are the accepted cost.
-  #
-  # NOTE: SimplifyJobs/Summer2027-Internships serves a byte-identical file to
-  # Summer2026 (verified Aug 2026) — a mirror, not a second source.
+    url: https://raw.githubusercontent.com/vanshb03/Summer2027-Internships/main/README.md
 
 settings:
   # Only consider postings still marked active/open by the source.
   require_active: true
 
-  # US roles: which sponsorship values are allowed through.
-  # Simplify's real enum is:
-  #   "Offers Sponsorship" | "Does Not Offer Sponsorship"
-  #   | "U.S. Citizenship is Required" | "Other"  (<- 99% of rows, means "unspecified")
-  # "Other" is mapped to `unknown`. Set allow_unknown_sponsorship: true to let
-  # unspecified US roles through (very noisy — see README).
-  # With the h1b_sponsors.yaml list in play this is less all-or-nothing than
-  # it was: known sponsors are badged and sent as verified either way, and
-  # this flag now only decides whether *unlisted* US companies ride along
-  # (flagged "sponsorship unverified") or are dropped outright.
-  #   true  -> ~50/day, known sponsors visually distinguishable in the channel
-  #   false -> ~15/day, known sponsors only
-  allow_unknown_sponsorship: false
-
-  # Titles containing any of these terms are dropped before location checks.
-  # Matched whole-word against the normalized (lowercased, de-accented) title,
-  # so "intern" does NOT also drop "International Tax Analyst" or "Internal
-  # Tools Engineer" -- which is why the plural/suffix forms are listed out.
-  exclude_title_patterns:
+  # Primary enforcement of "internship only" is the source swap above -- both
+  # repos are internship/co-op boards by scope. This is the fallback safety
+  # net for the rows that leak through anyway (a company cross-posting its
+  # new-grad req into an internship board, an off-cycle "Early Career
+  # Program" row, etc.). Matched whole-word/phrase against the normalized
+  # title; a title matching none of these is dropped even though it came
+  # from an internship-scoped source.
+  require_internship_title_patterns:
     - intern
     - interns
     - internship
     - internships
-    # Clearance / US-person markers. The sponsor list is a company-level
-    # signal, so a sponsoring employer can still post a cleared req (Amazon
-    # has GovCloud work, Apple has US-persons-only roles). These catch the
-    # ones that announce it in the title.
-    - clearance
-    - security clearance
-    - ts/sci
-    - tssci
-    - sci
-    - polygraph
-    - poly
-    - top secret
-    - secret
-    - itar
-    - us citizen
-    - u.s. citizen
-    - citizenship required
-    - public trust
+    - co-op
+    - coop
+    - summer analyst
+    - student researcher
 
-    # --- non-CS role families -------------------------------------------
-    # Added when eu-tech-jobs came online. That source keeps rows the upstream
-    # tagger hasn't classified yet (it lags the scraper), so sales/retail/field
-    # roles arrive untagged and survive the role_family allowlist. These terms
-    # are the second line of defence and take the feed from ~132 to ~73/day.
-    #
-    # Every term below was checked against BOTH pools before being added --
-    # this list is global, so it also prunes the US sources. Net effect there
-    # is -140 matches, and after the tuning noted inline, zero of them are
-    # CS roles: they are overwhelmingly field-service and lab technicians.
-    #
-    # If you retune, re-check the guard cases. The traps found the first time:
-    #   "assurance"    -> kills "Quality Assurance Engineer"     (NOT added)
-    #   "hardware"     -> kills "SWE New Grad - Hardware Tools"  (phrase only)
-    #   "assistant"    -> kills "Research Assistant/Programmer"  (NOT added)
-    #   "marketing"    -> kills an ML New Grad + "Programmer Analyst,
-    #                     Marketing Analytics"                   (phrase only)
-    #   "commercial"   -> kills "Forward Deployed SWE New Grad - Commercial"
-    #                                                            (NOT added)
-    #   "recruitment"  -> kills "SWE - AI/LLM - Global Frontier Tech
-    #                     Recruitment Program"                   (NOT added)
-    #   "support"      -> kills "AI/Application Support Engineer" (NOT added)
-
-    # Sales. "sales" alone subsumes the -development/-representative/-manager/
-    # -specialist variants; the rest are the ones that don't contain the word.
-    - sales
+  # Titles containing any of these terms are dropped before location/category
+  # checks. Deliberately short: with role_categories.yaml now doing the "does
+  # this look like a CS/CE role" work as a positive screen, most of the old
+  # non-CS blocklist (retail, back-office, the EU source's French/German/
+  # Italian/Spanish terms) is dead weight now that source is gone -- a title
+  # that doesn't look like software/embedded/hardware engineering is dropped
+  # by the category screen without needing to be named here first.
+  #
+  # What's left is either genuinely global (sales/recruiting/legal titles that
+  # could theoretically contain a category keyword) or a specific trap found
+  # while tuning:
+  #   "sales engineer" / "solutions engineer" -- pre-sales technical roles.
+  #   Would otherwise ride into Software or Hardware Engineering on the
+  #   "engineer" association if those categories are ever loosened to a bare
+  #   "engineer" term (they currently are NOT, on purpose -- see
+  #   role_categories.yaml -- so these are a belt-and-suspenders guard, not
+  #   load-bearing today).
+  #
+  # NOTE: clearance/citizenship terms (TS/SCI, polygraph, ITAR, "US citizen
+  # required"...) that the old EU/sponsorship-focused config excluded are
+  # deliberately NOT here. Those existed to protect international candidates
+  # who could never clear them; a US citizen isn't blocked by a title merely
+  # announcing a clearance requirement. Cleared defense/aerospace roles are
+  # exactly the kind of posting notify_companies.yaml is meant to surface.
+  exclude_title_patterns:
+    - sales engineer
+    - solutions engineer
+    - technical account manager
     - account executive
-    - sales development
     - business development
-    - account manager
-    - business developer
-    - key account
-    - conseiller          # FR: sales advisor
-    - conseillere
-    - vente               # FR: sales
-    - ventes
-    - chef de secteur     # FR: area sales manager
-    - terrain             # FR: "Commercial(e) Terrain" = field sales
-
-    # One company ("Agency") posts the same freelance data-labelling gig across
-    # every EU country -- 103 near-identical rows in a single snapshot.
-    - ai trainer
-    - freelance ai
-
-    # Field service / hardware / lab. This is the group that also does the
-    # heavy lifting on the US side (~125 of the ~140 US removals).
+    - sales development
     - technician
-    - technicien
-    - technicienne
     - field service
-    - electricien
-    - electrician
-    - mecanicien
-    - installateur
-    - avionics
-    - hardware engineer   # phrase, not bare "hardware" -- see traps above
-    - hardware technician
-
-    # Internships/apprenticeships in the languages the EU source actually
-    # publishes in. The English terms above miss all of these.
-    - alternance
-    - alternant
-    - alternante
-    - stage
-    - stagiaire
-    - werkstudent
-    - working student
-    - apprenti
-    - apprentie
-    - apprentice
-    - apprenticeship
-    - praktikum
-    - praktikant
-    - praktikantin
-    - tirocinio
-    - becario
-
-    # Retail / warehouse / in-store. Almost all French supermarket chains that
-    # the EU source carries; they pass the EU location check cleanly.
-    - caisse              # checkout
-    - employe             # "EMPLOYE COMMERCIAL LIBRE SERVICE"
-    - vendeur
-    - vendeuse
-    - magasin
-    - omnicanal
-    - hote                # "hote/hotesse d'accueil" = receptionist
-    - hotesse
-    - preparateur
-    - cariste             # forklift operator
-    - logistique
-    - chef de rayon
-    - manutentionnaire
-
-    # Back-office corporate.
-    - accountant
-    - comptable
-    - juriste
-    - legal
-    - avocat
     - recruiter
-    - recrutement
+    - recruiting
     - talent acquisition
-    - ressources humaines
-    - secretaire
-    - controleur de gestion
-    - paie                # payroll
-    - banque
-    - marketing digital   # phrases, not bare "marketing" -- see traps above
-    - chef de produit
-    - charge de communication
+    - human resources
+    - accountant
+    - paralegal
+    - attorney
+    - payroll
+    - brand marketing
+    - product marketing
     - social media
-    - brand manager
+    - content marketing
 
   # Drop seen-ids first observed more than this many days ago.
   prune_after_days: 90
 
-  # Safety cap on how many postings one run may notify about.
-  # Protects against a source reformatting and looking like 5,000 "new" jobs.
+  # Safety cap on how many postings one run may notify about. Only postings
+  # from a config/notify_companies.yaml company are candidates for
+  # notification at all -- see README -- so this caps that (much smaller)
+  # pool, not the full board.
   max_notifications_per_run: 60
