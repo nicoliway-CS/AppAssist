@@ -152,6 +152,11 @@ def main() -> int:
     log.info("%d notify-list matches, %d new after dedupe", len(notify_candidates), len(new_postings))
 
     now_iso = datetime.now(timezone.utc).isoformat()
+    # Updated unconditionally on every non-dry-run so the commit graph shows
+    # the bot is alive even on an hourly run that finds nothing new -- state
+    # would otherwise only change when there's an actual match or a prune,
+    # which can go quiet for a stretch during a slow week.
+    state["last_checked"] = now_iso
 
     # --- bootstrap: record everything, notify about nothing ---
     if bootstrapping:
@@ -175,11 +180,13 @@ def main() -> int:
     # --- notify ---
     if not new_postings:
         log.info("nothing new this run")
-        if not args.dry_run:
-            removed = prune(state, settings.get("prune_after_days", 90))
-            if removed:
-                log.info("pruned %d stale ids", removed)
-                save_state(state)
+        if args.dry_run:
+            log.info("[dry-run] state not written")
+            return 0
+        removed = prune(state, settings.get("prune_after_days", 90))
+        if removed:
+            log.info("pruned %d stale ids", removed)
+        save_state(state)
         return 0
 
     cap = settings.get("max_notifications_per_run", 60)
